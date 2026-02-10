@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=%h/src/todoist-count-badge/todoist_badge.py
 Environment="TODOIST_API_TOKEN=YOUR_API_TOKEN_HERE"
+Environment="TODOIST_DESKTOP_ID=application://todoist.desktop"
 StandardOutput=journal
 StandardError=journal
 
