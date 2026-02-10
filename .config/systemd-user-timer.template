@@ -1,0 +1,11 @@
+[Unit]
+Description=Todoist Count Badge Updater Timer
+Requires=todoist-badge.service
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
