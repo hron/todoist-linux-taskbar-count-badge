@@ -20,7 +20,7 @@ Updates the count badge on `todoist.desktop` via D-Bus by consuming the Todoist 
 
 1. Clone or download this repository:
 ```bash
-cd /home/algus/src/todoist-count-badge
+cd $HOME/src/todoist-count-badge
 ```
 
 2. Install dependencies:
@@ -67,7 +67,7 @@ crontab -e
 
 Add this line:
 ```cron
-*/5 * * * * export TODOIST_API_TOKEN=YOUR_API_TOKEN && /usr/bin/python3 /home/algus/src/todoist-count-badge/todoist_badge.py
+*/5 * * * * export TODOIST_API_TOKEN=YOUR_API_TOKEN && /usr/bin/python3 $HOME/src/todoist-count-badge/todoist_badge.py
 ```
 
 #### Option 2: Systemd Timer

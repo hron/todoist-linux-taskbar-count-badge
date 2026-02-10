@@ -9,7 +9,7 @@
 ## 2. Install Dependencies
 
 ```bash
-cd /home/algus/src/todoist-count-badge
+cd $HOME/src/todoist-count-badge
 bash setup.sh
 ```
 
@@ -42,7 +42,7 @@ crontab -e
 
 Add this line:
 ```cron
-*/5 * * * * export TODOIST_API_TOKEN=YOUR_API_TOKEN && /home/algus/src/todoist-count-badge/todoist_badge.py
+*/5 * * * * export TODOIST_API_TOKEN=YOUR_API_TOKEN && $HOME/src/todoist-count-badge/todoist_badge.py
 ```
 
 ### Option B: Systemd User Timer (Recommended)
