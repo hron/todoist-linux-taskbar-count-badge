@@ -30,14 +30,16 @@ class TodoistBadgeUpdater:
     TODOIST_API_URL = "https://api.todoist.com/rest/v2"
     FREEDESKTOP_APP_ID = "org.gnome.Todoist"
     
-    def __init__(self, api_token: str):
+    def __init__(self, api_token: str, app_id: str = "application://todoist.desktop"):
         """
         Initialize the updater with a Todoist API token.
         
         Args:
             api_token: Your Todoist API token
+            app_id: D-Bus application ID for the launcher entry (defaults to application://todoist.desktop)
         """
         self.api_token = api_token
+        self.app_id = app_id
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {api_token}",
@@ -75,7 +77,6 @@ class TodoistBadgeUpdater:
         """
         try:
             tasks = self.get_active_tasks()
-            logger.error(f"Fetched {len(tasks)} tasks from Todoist API")
             return len(tasks)
         except Exception as e:
             logger.error(f"Error counting tasks: {e}")
@@ -83,7 +84,7 @@ class TodoistBadgeUpdater:
     
     def update_badge_dbus(self, count: int) -> bool:
         """
-        Update the count badge on todoist.desktop via D-Bus.
+        Update the count badge on todoist.desktop via D-Bus using Unity LauncherEntry.
         
         Args:
             count: The count to display on the badge
@@ -94,79 +95,33 @@ class TodoistBadgeUpdater:
         try:
             bus = dbus.SessionBus()
             
-            # Get the application object
-            app_object = bus.get_object(
-                'org.freedesktop.DBus',
-                '/org/freedesktop/DBus'
+            # Build properties dictionary for the Update signal
+            properties = dbus.Dictionary(
+                {
+                    'count-visible': dbus.Boolean(True),
+                    'count': dbus.UInt32(count)
+                },
+                signature='sv'
             )
             
-            # Try to update the badge using the standard D-Bus interface
-            # This uses the org.freedesktop.Application interface
-            todoist_app = bus.get_object(
-                'org.gnome.Todoist',
-                '/org/gnome/Todoist'
+            # Send the Update signal as a broadcast message
+            # The Update signal is sent to listeners on the com.canonical.Unity.LauncherEntry interface
+            msg = dbus.lowlevel.SignalMessage(
+                '/',
+                'com.canonical.Unity.LauncherEntry',
+                'Update'
             )
+            msg.append(self.app_id, signature='s')
+            msg.append(properties, signature='a{sv}')
             
-            # Set the badge count using the UnityLauncherEntry interface
-            # or org.freedesktop.Application.SetProperty
-            properties_iface = dbus.Interface(
-                todoist_app,
-                'org.freedesktop.DBus.Properties'
-            )
-    
-            # Update the badge count
-            properties_iface.Set(
-                'org.freedesktop.Application',
-                'badge',
-                dbus.UInt32(count)
-            )
+            bus.send_message(msg)
             
-            logger.info(f"Badge updated to {count} via D-Bus")
+            logger.info(f"Badge updated to {count} via com.canonical.Unity.LauncherEntry")
             return True
             
-        except dbus.DBusException as e:
-            logger.warning(f"D-Bus error (trying alternative method): {e}")
-            return self._update_badge_unity(count)
         except Exception as e:
             logger.error(f"Failed to update badge via D-Bus: {e}")
-            return False
-    
-    def _update_badge_unity(self, count: int) -> bool:
-        """
-        Alternative method using Unity LauncherEntry for badge updates.
-        
-        Args:
-            count: The count to display on the badge
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            bus = dbus.SessionBus()
-            
-            # Use Unity LauncherEntry interface
-            launcher_entry = bus.get_object(
-                'com.canonical.Unity.LauncherEntry',
-                '/com/canonical/unity/launcher/entry/0'
-            )
-            
-            properties = dbus.Interface(
-                launcher_entry,
-                'org.freedesktop.DBus.Properties'
-            )
-            
-            # Set badge count
-            properties.Set(
-                'com.canonical.Unity.LauncherEntry',
-                'count',
-                dbus.Int64(count)
-            )
-            
-            logger.info(f"Badge updated to {count} via Unity LauncherEntry")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to update badge via Unity LauncherEntry: {e}")
+            logger.debug(f"Exception details: {type(e).__name__}: {e}")
             return False
     
     def update(self) -> Optional[int]:
@@ -210,7 +165,6 @@ def main():
     # Get API token from argument or environment variable
     api_token = args.token
     if not api_token:
-        import os
         api_token = os.getenv("TODOIST_API_TOKEN")
     
     if not api_token:
@@ -220,8 +174,12 @@ def main():
         )
         sys.exit(1)
     
+    # Get D-Bus application ID from environment variable with default
+    app_id = os.getenv("TODOIST_DESKTOP_ID", "application://todoist.desktop")
+    logger.debug(f"Using application ID: {app_id}")
+    
     # Create updater and run
-    updater = TodoistBadgeUpdater(api_token)
+    updater = TodoistBadgeUpdater(api_token, app_id)
     count = updater.update()
     
     if count is not None:
