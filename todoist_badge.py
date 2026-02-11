@@ -96,9 +96,10 @@ class TodoistBadgeUpdater:
             bus = dbus.SessionBus()
             
             # Build properties dictionary for the Update signal
+            # Hide the count badge when there are no tasks for today
             properties = dbus.Dictionary(
                 {
-                    'count-visible': dbus.Boolean(True),
+                    'count-visible': dbus.Boolean(count > 0),
                     'count': dbus.UInt32(count)
                 },
                 signature='sv'
