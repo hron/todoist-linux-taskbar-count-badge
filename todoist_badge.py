@@ -27,8 +27,7 @@ logger.setLevel(log_level)
 class TodoistBadgeUpdater:
     """Updates Todoist count badge via D-Bus using Todoist API."""
     
-    TODOIST_API_URL = "https://api.todoist.com/rest/v2"
-    FREEDESKTOP_APP_ID = "org.gnome.Todoist"
+    TODOIST_API_URL = "https://api.todoist.com/api/v1"
     
     def __init__(self, api_token: str, app_id: str = "application://todoist.desktop"):
         """
@@ -58,8 +57,8 @@ class TodoistBadgeUpdater:
         """
         try:
             response = self.session.get(
-                f"{self.TODOIST_API_URL}/tasks",
-                params={"filter": "today | overdue"}
+                f"{self.TODOIST_API_URL}/tasks/filter",
+                params={"query": "today | overdue"}
             )
             response.raise_for_status()
             logger.debug(f"API response: {response.json()}")
