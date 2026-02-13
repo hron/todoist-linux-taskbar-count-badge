@@ -4,10 +4,12 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
-ExecStart=%h/src/todoist-count-badge/todoist_badge.py
+Type=simple
+ExecStart=/usr/bin/env python3 %h/src/todoist-count-badge/todoist_badge.py --interval 300
 Environment="TODOIST_API_TOKEN=YOUR_API_TOKEN_HERE"
 Environment="TODOIST_DESKTOP_ID=application://todoist.desktop"
+Restart=on-failure
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 

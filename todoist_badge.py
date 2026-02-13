@@ -5,6 +5,7 @@ This script fetches tasks from Todoist API and displays the count of tasks
 scheduled for today or overdue.
 """
 
+import time
 import requests
 import dbus
 from datetime import datetime, date
@@ -29,16 +30,18 @@ class TodoistBadgeUpdater:
     
     TODOIST_API_URL = "https://api.todoist.com/api/v1"
     
-    def __init__(self, api_token: str, app_id: str = "application://todoist.desktop"):
+    def __init__(self, api_token: str, app_id: str = "application://todoist.desktop", interval: int = 300):
         """
         Initialize the updater with a Todoist API token.
         
         Args:
             api_token: Your Todoist API token
             app_id: D-Bus application ID for the launcher entry (defaults to application://todoist.desktop)
+            interval: Time interval in seconds between updates (default 300)
         """
         self.api_token = api_token
         self.app_id = app_id
+        self.interval = interval
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {api_token}",
@@ -76,7 +79,7 @@ class TodoistBadgeUpdater:
         """
         try:
             tasks = self.get_active_tasks()
-            return len(tasks)
+            return len(tasks['results'])
         except Exception as e:
             logger.error(f"Error counting tasks: {e}")
             return 0
@@ -94,18 +97,13 @@ class TodoistBadgeUpdater:
         try:
             bus = dbus.SessionBus()
             
-            # Build properties dictionary for the Update signal
-            # Hide the count badge when there are no tasks for today
-            properties = dbus.Dictionary(
-                {
-                    'count-visible': dbus.Boolean(count > 0),
-                    'count': dbus.UInt32(count)
-                },
-                signature='sv'
-            )
+            # Build the properties dictionary
+            properties = {
+                'count-visible': dbus.Boolean(count > 0),
+                'count': dbus.UInt32(count),
+            }
             
-            # Send the Update signal as a broadcast message
-            # The Update signal is sent to listeners on the com.canonical.Unity.LauncherEntry interface
+            # Create and send the signal message
             msg = dbus.lowlevel.SignalMessage(
                 '/',
                 'com.canonical.Unity.LauncherEntry',
@@ -114,6 +112,8 @@ class TodoistBadgeUpdater:
             msg.append(self.app_id, signature='s')
             msg.append(properties, signature='a{sv}')
             
+            # Set the message to broadcast
+            msg.set_no_reply(True)
             bus.send_message(msg)
             
             logger.info(f"Badge updated to {count} via com.canonical.Unity.LauncherEntry")
@@ -124,20 +124,21 @@ class TodoistBadgeUpdater:
             logger.debug(f"Exception details: {type(e).__name__}: {e}")
             return False
     
-    def update(self) -> Optional[int]:
+    def run(self) -> Optional[int]:
         """
-        Perform the complete update: fetch tasks and update badge.
+        Perform the complete update: fetch tasks and update badge periodically.
         
         Returns:
             The count of tasks, or None if update failed
         """
         try:
-            count = self.count_todays_tasks()
-            self.update_badge_dbus(count)
-            return count
-        except Exception as e:
-            logger.error(f"Update failed: {e}")
-            return None
+            while True:
+                count = self.count_todays_tasks()
+                self.update_badge_dbus(count)
+                logger.debug(f"Next update in {self.interval} seconds")
+                time.sleep(self.interval)
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
 
 
 def main():
@@ -155,6 +156,12 @@ def main():
         "-v",
         action="store_true",
         help="Enable verbose logging"
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=300,
+        help="Interval in seconds between badge updates (daemon mode)"
     )
     
     args = parser.parse_args()
@@ -174,20 +181,13 @@ def main():
         )
         sys.exit(1)
     
-    # Get D-Bus application ID from environment variable with default
     app_id = os.getenv("TODOIST_DESKTOP_ID", "application://todoist.desktop")
     logger.debug(f"Using application ID: {app_id}")
     
-    # Create updater and run
-    updater = TodoistBadgeUpdater(api_token, app_id)
-    count = updater.update()
+    updater = TodoistBadgeUpdater(api_token, app_id, args.interval)
+    updater.run()
     
-    if count is not None:
-        logger.info(f"Successfully updated badge with {count} tasks")
-        sys.exit(0)
-    else:
-        logger.error("Failed to update badge")
-        sys.exit(1)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
